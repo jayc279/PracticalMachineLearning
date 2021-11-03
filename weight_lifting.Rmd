@@ -1,0 +1,161 @@
+---
+title: "Practical Machine Learning - Quantify Exercises Levels"
+author: "Jay Yanamandala"
+date: "November 03, 2021"
+output:
+  html_document:
+  fig_height: 7
+  fig_width: 7
+  pdf_document: null
+---
+  
+```{r setup, include=FALSE, results="hide", echo=FALSE, warning=FALSE, comment="", message=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## Executive Summary
+Goal of this project is to use [dataset](http://groupware.les.inf.puc-rio.br/har) from accelerometers on the belt, forearm, arm, and dumbell of 6 participants quantify how much of a particular activity they do correctly and incorrectly, using the 'classe' variable.   
+    
+Create a report describing how you built your model, and how you used cross validation.   
+   
+Questions to answer:  
+	1. what you think the expected out of sample error is?   
+	2. Why you made the choices you did.  
+	3. Prediction model to predict 20 different test cases - test set.  
+  
+The five different 'classe' factors in this dataset are: 
+	* Exactly according to the specification (Class A)
+	* Throwing the elbows to the front (Class B)
+	* Lifting the dumbbell only halfway (Class C)
+	* Lowering the dumbbell only halfway (Class D) 
+	* Throwing the hips to the front (Class E)
+    
+For more details, please read the section on [Weight Lifting Exercise Dataset](http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har)
+
+## Data Preprocessing  
+1. Load Required libraries
+2. Read CSV files
+3. Remove first 7 columns since they do not add value to this analysis
+4. Convert columns with all NAs to 0s
+5. Convert all 'integer' columns to 'numeric'
+6. Split training data set (70%) and a validation data set (30%). 
+7. Use the validation data set to conduct cross validation in future steps.
+  
+```{r librarysetup, echo=FALSE, warning=FALSE, comment="", message=FALSE}
+library(caret)
+library(dplyr)
+```
+
+```{r readcsvfile, echo=FALSE, warning=FALSE, comment="", message=FALSE}
+# use read.csv or fread
+pml_training <-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+pml_testing <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+trainData <- read.csv(url(pml_training),sep = ",", na.strings = c ("","NA"))
+testData <- read.csv(url(pml_testing),sep = ",", na.strings = c ("","NA"))
+```
+
+```{r data-setup, echo=FALSE, warning=FALSE, comment="", message=FALSE}
+## Data Clean, and Setup for Analysis  
+# Remove first 7 columns since they do not add value to this analysis
+trainData <- trainData[, -c(1:7)]
+testData <- testData[, -c(1:7)]
+```
+
+
+```{r remove-NAs, echo=FALSE, warning=FALSE, comment="", message=FALSE}
+## Convert columns with all NAs to 0s
+trainData <- trainData[, colSums(is.na(trainData)) == 0] 
+testData <- testData[, colSums(is.na(testData)) == 0] 
+```
+
+  
+```{r, results="hide", echo=FALSE, warning=FALSE, comment="", message=FALSE}
+## convert all 'integer' columns to 'numeric'
+trainData <- trainData %>%  mutate_if(is.integer, as.numeric)
+testData <- testData   %>% mutate_if(is.integer, as.numeric)
+
+## We split training data set (70%) and a validation data set (30%). 
+## We will use the validation data set to conduct cross validation in future steps.  
+
+set.seed(20211103) # For reproducible purpose
+inTrain <- createDataPartition(trainData$classe, p=0.70, list=F)
+trainingData <- trainData[inTrain, ]
+validationData <- trainData[-inTrain, ]
+```
+## Data Modeling  
+We fit a predictive model for activity recognition using **Random Forest** algorithm because it automatically selects important variables and is robust to correlated covariates & outliers in general. We will use **5-fold cross validation** when applying the algorithm. 
+  
+```{r, results="hide", echo=FALSE, warning=FALSE, comment="", message=FALSE}
+library(randomForest)
+controlRf <- trainControl(method="cv", 5)
+modelRf <- train(classe ~ ., data=trainingData, method="rf", trControl=controlRf, ntree=250)
+modelRf
+```
+  
+```{r, results="hide", echo=FALSE, warning=FALSE, comment="", message=FALSE}
+### We estimate the performance of the model on the validation data set.  
+predictRf <- predict(modelRf, validationData)
+confMat <- confusionMatrix(as.factor(validationData$classe), predictRf)
+```
+  
+Confusion Matrix Table:  
+  
+```{r confMatTable}
+confMat$table
+```
+  
+  
+### Accuracy and Prediction  
+```{r accuracy, results="hide", echo=FALSE, warning=FALSE, comment="", message=FALSE}
+accuracy <- postResample(predictRf, as.factor(validationData$classe))
+accuracy
+est_accuracy <- round(accuracy[1], 4)*100
+
+out_of_sample_error <- round(1 - as.numeric(confusionMatrix(as.factor(validationData$classe), predictRf)$overall[1]), 4) * 100
+out_of_sample_error
+```
+  
+The estimated accuracy of the model is  **`r est_accuracy`**    
+The estimated out-of-sample error is **`r out_of_sample_error`** 
+
+```{r predicting, results="hide", echo=FALSE, warning=FALSE, comment="", message=FALSE}
+## Predicting for Test Data Set
+## We apply the model to the original testing data set downloaded from the data source. We remove the `problem_id` column first.  
+result <- predict(modelRf, testData[, -length(names(testData))])
+result
+```
+
+  
+Predicted Result on Test Data:  
+**`r result`**  
+  
+
+## Citation  
+  
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. [Qualitative Activity Recognition of Weight Lifting Exercises](http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/work.jsf?p1=11201). Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
+  
+  
+## Appendix: Figures  
+### Correlation Matrix Visualization   
+```{r corrPlot, echo=FALSE, warning=FALSE, comment="", message=FALSE}
+library(corrplot)
+corrPlot <- cor(trainingData[, -length(names(trainingData))])
+corrplot(corrPlot, method="color")
+```
+
+### Decision Tree Visualization  
+```{r treeModel, echo=FALSE, warning=FALSE, comment="", message=FALSE}
+library(rpart)
+library(rpart.plot)
+treeModel <- rpart(classe ~ ., data=trainingData, method="class")
+prp(treeModel)
+```
+
+
+
+
+
+
+
+
+
