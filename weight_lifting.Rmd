@@ -3,10 +3,10 @@ title: "Practical Machine Learning - Quantify Exercises Levels"
 author: "Jay Yanamandala"
 date: "November 03, 2021"
 output:
+  pdf_document:
   html_document:
   fig_height: 7
   fig_width: 7
-  pdf_document: null
 ---
   
 ```{r setup, include=FALSE, results="hide", echo=FALSE, warning=FALSE, comment="", message=FALSE}
